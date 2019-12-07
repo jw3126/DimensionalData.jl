@@ -22,6 +22,8 @@ val(dim::AbDim) = dim.val
 grid(dim::AbDim) = dim.grid
 metadata(dim::AbDim) = dim.metadata
 
+crs(dim::AbDim) = crs(grid(dim))
+selector_crs(dim::AbDim) = selector_crs(grid(dim))
 order(dim::AbDim) = order(grid(dim))
 indexorder(dim::AbDim) = indexorder(order(dim))
 arrayorder(dim::AbDim) = arrayorder(order(dim))
@@ -29,6 +31,8 @@ arrayorder(dim::AbDim) = arrayorder(order(dim))
 # DimensionalData interface methods
 rebuild(dim::D, val, grid=grid(dim)) where D <: AbDim =
     rebuild(dim, val, grid, metadata(dim))
+rebuild(dim::D; val=val(dim), grid=grid(dim), metadata=metadata(dim)) where D <: AbDim =
+    rebuild(dim, val, grid, metadata)
 rebuild(dim::D, val, grid, metadata) where D <: AbDim =
     constructorof(D)(val, grid, metadata)
 

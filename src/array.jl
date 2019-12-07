@@ -9,6 +9,11 @@ const StandardIndices = Union{AbstractArray,Colon,Integer}
 dims(A::AbDimArray) = A.dims
 bounds(A::AbDimArray) = bounds(dims(A))
 @inline rebuild(x, data, dims=dims(x)) = rebuild(x, data, dims, refdims(x))
+crs(A::AbDimArray) = firstcrs(map(crs, dims(A)))
+
+firstcrs(crs::Nothing, args...) = firstcrs(args...)
+firstcrs(crs, args...) = crs 
+firstcrs() = nothing
 
 
 # Array interface methods ######################################################

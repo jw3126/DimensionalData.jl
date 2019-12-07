@@ -30,7 +30,7 @@ relationorder(order::Ordered) = order.relation
 """
 Trait indicating that the array or dimension has no order.
 """
-struct Unordered{R} <: Order 
+struct Unordered{R} <: Order
     relation::R
 end
 Unordered() = Unordered(Forward())
@@ -52,19 +52,19 @@ struct Reverse <: Order end
 
 Base.reverse(::Reverse) = Forward()
 Base.reverse(::Forward) = Reverse()
-# Base.reverse(o::Ordered) = 
+# Base.reverse(o::Ordered) =
     # Ordered(indexorder(o), reverse(relationorder(o)), reverse(arrayorder(o)))
-# Base.reverse(o::Unordered) = 
+# Base.reverse(o::Unordered) =
     # Unordered(reverse(relationorder(o)))
 
-reverseindex(o::Unordered) = 
+reverseindex(o::Unordered) =
     Unordered(reverse(relationorder(o)))
-reverseindex(o::Ordered) = 
+reverseindex(o::Ordered) =
     Ordered(reverse(indexorder(o)), arrayorder(o), reverse(relationorder(o)))
 
-reversearray(o::Unordered) = 
+reversearray(o::Unordered) =
     Unordered(reverse(relationorder(o)))
-reversearray(o::Ordered) = 
+reversearray(o::Ordered) =
     Ordered(indexorder(o), reverse(arrayorder(o)), reverse(relationorder(o)))
 
 isrev(::Forward) = false
@@ -88,7 +88,7 @@ Each cell value represents a single discrete sample taken at the index location.
 struct SingleSample <: Sampling end
 
 """
-Multiple samples from the span combined using method `M`, 
+Multiple samples from the span combined using method `M`,
 where `M` is `typeof(mean)`, `typeof(sum)` etc.
 """
 struct MultiSample{M} <: Sampling end
@@ -106,6 +106,10 @@ This is frequently `Start` for time series, but may be `Center`
 for spatial data.
 """
 abstract type Locus end
+
+Base.length(x::Locus) = 1
+Base.iterate(x::Locus) = (x, nothing)
+Base.iterate(x::Locus, ::Any) = nothing
 
 """
 Indicates dimensions that are defined by their center coordinates/time/position.
@@ -132,6 +136,7 @@ Traits describing the grid type of a dimension.
 abstract type Grid end
 
 dims(g::Grid) = nothing
+crs(g::Grid) = nothing
 arrayorder(grid::Grid) = arrayorder(order(grid))
 indexorder(grid::Grid) = indexorder(order(grid))
 relationorder(grid::Grid) = relationorder(order(grid))
@@ -160,6 +165,7 @@ abstract type AbstractAllignedGrid{O} <: IndependentGrid{O} end
 order(g::AbstractAllignedGrid) = g.order
 locus(g::AbstractAllignedGrid) = g.locus
 sampling(g::AbstractAllignedGrid) = g.sampling
+crs(g::AbstractAllignedGrid) = g.crs
 
 """
 An alligned grid without known regular spacing. These grids will generally be paired
@@ -173,20 +179,24 @@ As the size of the cells is not known, the bounds must be actively tracked.
 - `sampling`: `Sampling` trait indicating wether the grid cells are single samples or means
 - `bounds`: the outer edges of the grid (different to the first and last coordinate).
 """
-struct AllignedGrid{O<:Order,L<:Locus,Sa<:Sampling,B} <: AbstractAllignedGrid{O}
+struct AllignedGrid{O<:Order,L<:Locus,Sa<:Sampling,B,C,SC} <: AbstractAllignedGrid{O}
     order::O
     locus::L
     sampling::Sa
     bounds::B
+    crs::C
+    selector_crs::SC
 end
-AllignedGrid(; order=Ordered(), locus=Start(), sampling=UnknownSampling(), bounds=nothing) =
-    AllignedGrid(order, locus, sampling, bounds)
+AllignedGrid(; order=Ordered(), locus=Start(), sampling=UnknownSampling(),
+             bounds=nothing, crs=nothing, selector_crs=nothing) =
+    AllignedGrid(order, locus, sampling, bounds, crs, selector_crs)
 
 bounds(g::AllignedGrid) = g.bounds
 
-rebuild(g::AllignedGrid; 
-        order=order(g), locus=locus(g), sampling=sampling(g), bounds=bounds(g)) =
-    AllignedGrid(order, locus, sampling, bounds)
+rebuild(g::AllignedGrid;
+        order=order(g), locus=locus(g), sampling=sampling(g), 
+        bounds=bounds(g), crs=crs(g), selector_crs=selector_crs(g)) =
+    AllignedGrid(order, locus, sampling, bounds, crs, selector_crs)
 
 """
 An alligned grid known to have equal spacing between all cells.
@@ -197,20 +207,24 @@ An alligned grid known to have equal spacing between all cells.
 - `sampling`: `Sampling` trait indicating wether the grid cells are single samples or means
 - `span`: the size of a grid step, such as 1u"km" or `Month(1)`
 """
-struct RegularGrid{O<:Order,L<:Locus,Sa<:Sampling,Sp} <: AbstractAllignedGrid{O}
+struct RegularGrid{O<:Order,L<:Locus,Sa<:Sampling,Sp,C,SC} <: AbstractAllignedGrid{O}
     order::O
     locus::L
     sampling::Sa
     span::Sp
+    crs::C
+    selector_crs::SC
 end
-RegularGrid(; order=Ordered(), locus=Start(), sampling=UnknownSampling(), span=nothing) =
-    RegularGrid(order, locus, sampling, span)
+RegularGrid(; order=Ordered(), locus=Start(), sampling=UnknownSampling(),
+            span=nothing, crs=nothing, selector_crs=nothing) =
+    RegularGrid(order, locus, sampling, span, crs, selector_crs)
 
 span(g::RegularGrid) = g.span
 
 rebuild(g::RegularGrid; 
-        order=order(g), locus=locus(g), sampling=sampling(g), span=span(g)) =
-    RegularGrid(order, locus, sampling, span)
+        order=order(g), locus=locus(g), sampling=sampling(g), 
+        span=span(g), crs=crs(g), selector_crs=selector_crs(g)) =
+    RegularGrid(order, locus, sampling, span, crs, selector_crs)
 
 
 abstract type AbstractCategoricalGrid{O} <: IndependentGrid{O} end
@@ -242,6 +256,7 @@ abstract type DependentGrid <: Grid end
 locus(g::DependentGrid) = g.locus
 dims(g::DependentGrid) = g.dims
 sampling(g::DependentGrid) = g.sampling
+crs(g::AbstractAllignedGrid) = g.crs
 
 """
 Grid type using an affine transformation to convert dimension from
@@ -252,16 +267,21 @@ Grid type using an affine transformation to convert dimension from
           needed by the transform function.
 - `sampling`: a `Sampling` trait indicating wether the grid cells are sampled points or means
 """
-struct TransformedGrid{D,L,Sa<:Sampling} <: DependentGrid
+struct TransformedGrid{D,L,Sa<:Sampling,C,SC} <: DependentGrid
     dims::D
     locus::L
     sampling::Sa
+    crs::C
+    selector_crs::SC
 end
-TransformedGrid(dims=(), locus=Start(), sampling=UnknownSampling()) = 
-    TransformedGrid(dims, locus, sampling)
+TransformedGrid(dims=(), locus=Start(), sampling=UnknownSampling(),
+                crs=crs(g), selector_crs=selector_crs(g)) =
+    TransformedGrid(dims, locus, sampling, crs, selector_crs)
 
-rebuild(g::TransformedGrid; dims=dims(g), locus=locus(g), sampling=sampling(g)) = 
-    TransformedGrid(dims, locus, sampling)
+rebuild(g::TransformedGrid; 
+        dims=dims(g), locus=locus(g), sampling=sampling(g), 
+        crs=crs(g), selector_crs=selector_crs(g)) =
+    TransformedGrid(dims, locus, sampling, crs, selectorcrs)
 
 """
 A grid dimension that uses an array lookup to convert dimension from
@@ -272,13 +292,18 @@ A grid dimension that uses an array lookup to convert dimension from
           needed to index the lookup matrix.
 - `sampling`: a `Sampling` trait indicating wether the grid cells are sampled points or means
 """
-struct LookupGrid{D,L,Sa<:Sampling} <: DependentGrid
+struct LookupGrid{D,L,Sa<:Sampling,C,SC} <: DependentGrid
     dims::D
     locus::L
     sampling::Sa
+    crs::C
+    selector_crs::SC
 end
-LookupGrid(dims=(), locus=Start(), sampling=UnknownSampling()) = 
-    LookupGrid(dims, locus, sampling)
+LookupGrid(dims=(), locus=Start(), sampling=UnknownSampling(),
+           crs=crs(g), selector_crs=selector_crs(g)) =
+    LookupGrid(dims, locus, sampling, crs, selector_crs)
 
-rebuild(g::LookupGrid; dims=dims(g), locus=locus(g), sampling=sampling(g)) = 
-    LookupGrid(dims, locus, sampling)
+rebuild(g::LookupGrid; 
+        dims=dims(g), locus=locus(g), sampling=sampling(g), 
+        crs=crs(g), selector_crs=selector_crs(g)) =
+    LookupGrid(dims, locus, sampling, crs, selector_crs)
