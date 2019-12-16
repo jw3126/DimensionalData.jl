@@ -260,11 +260,19 @@ type and order.
 @inline reducedims(grid::CategoricalGrid, dim) =
     rebuild(dim, [:combined], CategoricalGrid(Unordered()))
 @inline reducedims(grid::AlignedGrid, dim) = begin
-    grid = AlignedGrid(Unordered(), locus(grid), MultiSample(), bounds(grid, dim))
+    grid = AlignedGrid(Ordered(), locus(grid), MultiSample())
+    rebuild(dim, reducedims(locus(grid), dim), grid)
+end
+@inline reducedims(grid::BoundedGrid, dim) = begin
+    grid = BoundedGrid(Ordered(), locus(grid), MultiSample(), bounds(grid, dim))
+    rebuild(dim, reducedims(locus(grid), dim), grid)
+end
+@inline reducedims(grid::AlignedGrid, dim) = begin
+    grid = AlignedGrid(Ordered(), locus(grid), MultiSample())
     rebuild(dim, reducedims(locus(grid), dim), grid)
 end
 @inline reducedims(grid::RegularGrid, dim) = begin
-    grid = RegularGrid(Unordered(), locus(grid), MultiSample(), span(grid) * length(val(dim)))
+    grid = RegularGrid(Ordered(), locus(grid), MultiSample(), span(grid) * length(val(dim)))
     rebuild(dim, reducedims(locus(grid), dim), grid)
 end
 @inline reducedims(grid::DependentGrid, dim) =
